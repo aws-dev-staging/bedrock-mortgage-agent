@@ -12,6 +12,7 @@ from chat import Chat
 from fsi_agent import FSIAgent
 from boto3.dynamodb.conditions import Key
 from langchain.llms.bedrock import Bedrock
+from langchain_community.chat_models import BedrockChat
 from langchain.chains import ConversationChain
 
 # Create reference to DynamoDB tables and S3 bucket
@@ -645,17 +646,20 @@ def loan_application(intent_request):
 
         # Get the fields from the PDF
         fields = reader.Root.AcroForm.Fields
+        print(f"fields: {fields}")
 
         # Loop through the fields
         for field in fields:
             field_name = field.T if hasattr(field, 'T') else ''
             field_value = field.V if hasattr(field, 'V') else ''
+            print(f"field_name: {field_name}; field_value: {field_value}")
 
         if acroform is not None and '/Fields' in acroform:
             fields = acroform['/Fields']
             for field in fields:
                 field_name = field['/T'][1:-1]  # Extract field name without '/'
                 if field_name in fields_to_update:
+                    print(f"In fields to update field_name: {field_name}")
                     field.update(pdfrw.PdfDict(V=fields_to_update[field_name]))
 
         writer = pdfrw.PdfWriter()
@@ -698,8 +702,11 @@ def invoke_agent(prompt, session_id):
     Invokes Amazon Bedrock-powered LangChain agent with 'prompt' input.
     """
     chat = Chat({'Human': prompt}, session_id)
-    llm = Bedrock(client=bedrock_client, model_id="anthropic.claude-v2:1", region_name=os.environ['AWS_REGION']) # anthropic.claude-instant-v1 / anthropic.claude-3-sonnet-20240229-v1:0
-    llm.model_kwargs = {'max_tokens_to_sample': 350}
+    # llm = Bedrock(client=bedrock_client, model_id="anthropic.claude-v2:1", region_name=os.environ['AWS_REGION']) # anthropic.claude-instant-v1 / anthropic.claude-3-sonnet-20240229-v1:0
+    llm = BedrockChat(
+        model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+        model_kwargs={'max_tokens_to_sample': 350}
+    )
     lex_agent = FSIAgent(llm, chat.memory)
     
     message = lex_agent.run(input=prompt)
